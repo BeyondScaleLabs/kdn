@@ -14,10 +14,8 @@ allowed_remote_resources:
 create_issues:
     allow_targets:
         repos:
-            - openkaiden/kaiden
+            - BeyondScaleLabs/kdn
             - fullsend-ai/fullsend
-agents:
-    - name: code
-      source: code.yaml
-    - name: fix
-      source: fix.yaml
+inference:
+    project: fullsend-eval
+    wif_provider: projects/457914409018/locations/global/workloadIdentityPools/fullsend-inference/providers/gh-beyondscalelabs-kdn
