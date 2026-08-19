@@ -1,0 +1,21 @@
+# fullsend per-repo configuration
+# https://github.com/fullsend-ai/fullsend
+#
+# This file configures fullsend for per-repo installation mode.
+# See ADR 0033 for details.
+version: "1"
+roles:
+    - triage
+    - coder
+    - fix
+allowed_remote_resources:
+    - https://raw.githubusercontent.com/fullsend-ai/fullsend/
+    - https://raw.githubusercontent.com/fullsend-ai/agents/
+create_issues:
+    allow_targets:
+        repos:
+            - BeyondScaleLabs/kdn
+            - fullsend-ai/fullsend
+inference:
+    project: fullsend-eval
+    wif_provider: projects/457914409018/locations/global/workloadIdentityPools/fullsend-inference/providers/gh-beyondscalelabs-kdn
