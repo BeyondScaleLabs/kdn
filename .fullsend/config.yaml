@@ -24,3 +24,5 @@ agents:
       source: code.yaml
     - name: fix
       source: fix.yaml
+    - name: webupd
+      source: harness/webupd.yaml
