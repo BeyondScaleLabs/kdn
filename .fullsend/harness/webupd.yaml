@@ -26,13 +26,14 @@ host_files:
     optional: true
   - src: /tmp/workspace/kdn-info.json
     dest: /sandbox/workspace/kdn-info.json
+    optional: true
 
 pre_script: scripts/pre-webupd.sh
 
 validation_loop:
   script: scripts/validate-output-schema.sh
   schema: schemas/webupd-result.schema.json
-  max_iterations: 2
+  max_iterations: 1
 
 post_script: scripts/post-webupd.sh
 
@@ -41,5 +42,9 @@ env:
     GH_TOKEN: "${GH_TOKEN}"
     WEBSITE_GH_TOKEN: "${WEBSITE_GH_TOKEN}"
     REPO_FULL_NAME: "${REPO_FULL_NAME}"
-  sandbox:
-    KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
+ # sandbox:
+ #   KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
+ #   #GH_TOKEN: "${GH_TOKEN}"
+ #   WEBSITE_GH_TOKEN: "${WEBSITE_GH_TOKEN}"
+ #    GITHUB_WORKSPACE: "/sandbox/workspace"
+

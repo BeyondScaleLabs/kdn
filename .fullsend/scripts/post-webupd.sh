@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+
+echo "Validating FULLSEND_VALIDATED_ITERATION_DIR  ${FULLSEND_VALIDATED_ITERATION_DIR:-} and FULLSEND_OUTPUT_DIR ${FULLSEND_OUTPUT_DIR:-}"
+echo "Validating files are ${FULLSEND_VALIDATED_ITERATION_DIR}/files"
+
+
 # Prefer the validated iteration directory set by the harness
 if [[ -n "${FULLSEND_VALIDATED_ITERATION_DIR:-}" ]]; then
   RESULT_FILE="${FULLSEND_VALIDATED_ITERATION_DIR}/agent-result.json"
