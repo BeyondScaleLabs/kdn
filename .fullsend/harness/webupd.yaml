@@ -26,7 +26,7 @@ host_files:
     optional: true
   - src: /tmp/workspace/kdn-info.json
     dest: /sandbox/workspace/kdn-info.json
-
+    optional: true
 pre_script: scripts/pre-webupd.sh
 
 validation_loop:
