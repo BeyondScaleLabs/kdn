@@ -41,6 +41,7 @@ env:
     GH_TOKEN: "${GH_TOKEN}"
     WEBSITE_GH_TOKEN: "${WEBSITE_GH_TOKEN}"
     REPO_FULL_NAME: "${REPO_FULL_NAME}"
+    KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
  # sandbox:
  #   KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
  #   #GH_TOKEN: "${GH_TOKEN}"
