@@ -15,6 +15,7 @@ create_issues:
     allow_targets:
         repos:
             - BeyondScaleLabs/kdn
+            - openkaiden/kaiden
             - fullsend-ai/fullsend
 inference:
     project: fullsend-eval

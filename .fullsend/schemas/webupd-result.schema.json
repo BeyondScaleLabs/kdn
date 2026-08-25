@@ -35,6 +35,15 @@
           }
         }
       }
+    },
+    "audit_summary": {
+      "type": "object",
+      "properties": {
+        "providers_checked": { "type": "number" },
+        "agents_checked": { "type": "number" },
+        "preferences_checked": { "type": "number" },
+        "gaps_found": { "type": "number" }
+      }
     }
   }
 }

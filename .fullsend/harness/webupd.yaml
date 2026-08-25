@@ -26,7 +26,6 @@ host_files:
     optional: true
   - src: /tmp/workspace/kdn-info.json
     dest: /sandbox/workspace/kdn-info.json
-    optional: true
 
 pre_script: scripts/pre-webupd.sh
 
@@ -47,4 +46,6 @@ env:
  #   #GH_TOKEN: "${GH_TOKEN}"
  #   WEBSITE_GH_TOKEN: "${WEBSITE_GH_TOKEN}"
  #    GITHUB_WORKSPACE: "/sandbox/workspace"
+  sandbox:
+    KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
 
