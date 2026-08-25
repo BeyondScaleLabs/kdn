@@ -19,17 +19,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout kdn repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Checkout website repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: BeyondScaleLabs/website
           token: ${{ secrets.WEBSITE_GH_TOKEN }}
           path: target-repo
 
       - name: Checkout upstream defaults
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: fullsend-ai/fullsend
           ref: v0
