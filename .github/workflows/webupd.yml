@@ -55,35 +55,3 @@ jobs:
         with:
           name: fullsend-webupd
           path: ${{ github.workspace }}/output
-
-
-
-          name: fullsend-webupd
-
-on:
-  schedule:
-    - cron: '0 8 * * *'
-  workflow_dispatch: {}
-
-permissions:
-  actions: write
-  contents: write
-  id-token: write
-  issues: write
-  packages: read
-  pull-requests: write
-
-jobs:
-  harness:
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@84c8bbbb821ff85136854150b06740253709b3b8 # v0.37.0
-    with:
-      matrix: >-
-        {"include":[{"agent":"webupd","source_repo":"${{ github.repository }}","role":"coder","event_payload":"{\"source\":{\"system\":\"schedule\"}}","status_repo":"","status_number":""}]}
-      mint_url: https://mint.fullsend.sh
-      gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
-      runner_image: ubuntu-24.04
-    secrets:
-      FULLSEND_GCP_WIF_PROVIDER: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
-      FULLSEND_GCP_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
-      OTEL_EXPORTER_OTLP_TRACES_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_TRACES_HEADERS }}
-      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
