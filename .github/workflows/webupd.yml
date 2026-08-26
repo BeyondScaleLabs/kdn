@@ -2,86 +2,26 @@ name: fullsend-webupd
 
 on:
   schedule:
-    # Run daily at 8:00 AM UTC
     - cron: '0 8 * * *'
   workflow_dispatch: {}
 
-permissions:
-  contents: read
-  id-token: write
-
-concurrency:
-  group: webupd
-  cancel-in-progress: true
+permissions: {}
 
 jobs:
-  run:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout kdn repository
-        uses: actions/checkout@v4
-
-      - name: Checkout website repository
-        uses: actions/checkout@v4
-        with:
-          repository: BeyondScaleLabs/website
-          token: ${{ secrets.WEBSITE_GH_TOKEN }}
-          path: target-repo
-
-      - name: Checkout upstream defaults
-        uses: actions/checkout@v4
-        with:
-          repository: fullsend-ai/fullsend
-          ref: v0
-          path: .defaults
-          sparse-checkout: |
-            internal/scaffold/fullsend-repo/
-
-      - name: Prepare workspace (upstream defaults)
-        run: |
-          set -euo pipefail
-          SRC=".defaults/internal/scaffold/fullsend-repo"
-          LAYERED_DIRS="scripts"
-          for dir in ${LAYERED_DIRS}; do
-            if [[ -d "${SRC}/${dir}" ]]; then
-              mkdir -p ".fullsend/${dir}"
-              cp -r "${SRC}/${dir}/." ".fullsend/${dir}/"
-            fi
-          done
-          rm -rf .defaults
-
-      - name: Authenticate to GCP via WIF
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
-          project_id: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
-
-      - name: Prepare sandbox credentials
-        run: bash .fullsend/scripts/prepare-sandbox-credentials.sh
-
-      - name: Install fullsend CLI
-        uses: fullsend-ai/fullsend@v0
-        with:
-          agent: __install_only__
-
-      - name: Run webupd
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEBSITE_GH_TOKEN: ${{ secrets.WEBSITE_GH_TOKEN }}
-          REPO_FULL_NAME: ${{ github.repository }}
-          ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
-          CLOUD_ML_REGION: ${{ vars.FULLSEND_GCP_REGION }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/output"
-          fullsend run webupd \
-            --fullsend-dir "$GITHUB_WORKSPACE/.fullsend" \
-            --target-repo "$GITHUB_WORKSPACE/target-repo" \
-            --output-dir "$GITHUB_WORKSPACE/output"
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fullsend-webupd
-          path: ${{ github.workspace }}/output
+  harness:
+    permissions:
+      actions: write
+      id-token: write
+      contents: write
+      issues: write
+      packages: read
+      pull-requests: write
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@84c8bbbb821ff85136854150b06740253709b3b8 # v0.37.0
+    with:
+      matrix: >-
+        {"include":[{"agent":"webupd","source_repo":"BeyondScaleLabs/kdn","role":"harness","event_payload":"{\"source\":{\"system\":\"schedule\"}}","status_repo":"","status_number":""}]}
+      install_mode: per-repo
+      mint_url: ${{ vars.FULLSEND_MINT_URL }}
+      gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
+      runner_image: ubuntu-24.04
+    secrets: inherit
