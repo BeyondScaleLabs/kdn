@@ -18,7 +18,7 @@ jobs:
     uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@84c8bbbb821ff85136854150b06740253709b3b8 # v0.37.0
     with:
       matrix: >-
-        {"include":[{"agent":"webupd","source_repo":"${{ github.repository }}","role":"harness","event_payload":"{\"source\":{\"system\":\"schedule\"}}","status_repo":"","status_number":""}]}
+        {"include":[{"agent":"webupd","source_repo":"${{ github.repository }}","role":"webupd","event_payload":"{\"source\":{\"system\":\"schedule\"}}","status_repo":"","status_number":""}]}
       mint_url: ${{ vars.FULLSEND_MINT_URL }}
       gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
       runner_image: ubuntu-24.04
