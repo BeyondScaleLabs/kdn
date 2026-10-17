@@ -305,6 +305,11 @@ jobs:
           set +e # GitHub runs this with bash -e: keep going to record the exit code
           mkdir -p "$ART_DIR"
           start=$(date +%s)
+          # Live view of the agent. The stream is shaped by PR content, so workflow commands are disabled
+          # with a token generated here, which never enters the sandbox.
+          stop_token=$(openssl rand -hex 16)
+          echo "::group::Review agent (live)"
+          echo "::stop-commands::$stop_token"
           # shellcheck disable=SC2016 # the inner script expands inside the sandbox, not here
           timeout --kill-after=30 "$((REVIEW_TIMEOUT_SECS + 60))" \
             openshell sandbox exec -n "$SANDBOX" --timeout "$REVIEW_TIMEOUT_SECS" --no-tty \
@@ -322,25 +327,19 @@ jobs:
                   --permission-mode dontAsk \
                   --allowedTools "Read,Grep,Glob,Bash(git -C /sandbox/src diff:*),Bash(git -C /sandbox/src log:*),Bash(git -C /sandbox/src show:*),Bash(git -C /sandbox/src blame:*),Write(//tmp/review-output.json)" \
                   --disallowedTools "WebFetch,WebSearch" \
-                  --output-format json
+                  --output-format stream-json --verbose
               ' sh \
               "$(cat trusted/.github/codereview/task.md)" \
               "$(cat trusted/.github/codereview/pr-reviewer.md)" \
               "$REVIEW_MODEL" \
-            > "$ART_DIR/claude-output.json" 2> "$ART_DIR/claude-stderr.txt"
-          code=$?
+            2> "$ART_DIR/claude-stderr.txt" \
+            | tee "$ART_DIR/claude-output.jsonl" \
+            | jq -R -r --unbuffered -f trusted/.github/codereview/stream.jq
+          code=${PIPESTATUS[0]}
+          echo "::$stop_token::"
+          echo "::endgroup::"
           duration=$(( $(date +%s) - start ))
           echo "Review exited with $code after ${duration}s"
-          # Claude output is shaped by the PR content: kept in the artifact; only CLI status fields are logged,
-          # plus the error text on failure, with workflow commands disabled.
-          jq -r 'select(.type == "result") | "Claude: subtype=\(.subtype) is_error=\(.is_error) turns=\(.num_turns) api_error_status=\(.api_error_status)"' \
-            "$ART_DIR/claude-output.json" 2>/dev/null
-          if jq -e 'select(.type == "result") | .is_error == true' "$ART_DIR/claude-output.json" >/dev/null 2>&1; then
-            stop_token=$(openssl rand -hex 16)
-            echo "::stop-commands::$stop_token"
-            jq -r 'select(.type == "result") | .result | tostring | .[0:2000]' "$ART_DIR/claude-output.json"
-            echo "::$stop_token::"
-          fi
           timed_out=false
           if (( code == 124 || duration >= REVIEW_TIMEOUT_SECS )); then timed_out=true; fi
           {
@@ -387,14 +386,14 @@ jobs:
             failed=false
           fi
           # Cost and token usage computed by the Claude CLI (absent when the run timed out).
-          usage=$(jq -c 'select(.type == "result") | {
+          usage=$(jq -R -c 'fromjson? | select(.type == "result") | {
               cost_usd: (.total_cost_usd | numbers),
               num_turns: (.num_turns | numbers),
               input_tokens: (.usage.input_tokens | numbers),
               output_tokens: (.usage.output_tokens | numbers),
               cache_read_tokens: (.usage.cache_read_input_tokens // 0 | numbers),
               cache_write_tokens: (.usage.cache_creation_input_tokens // 0 | numbers)
-            }' "$ART_DIR/claude-output.json" 2>/dev/null | tail -n1 || true)
+            }' "$ART_DIR/claude-output.jsonl" 2>/dev/null | tail -n1 || true)
           [[ -n "$usage" ]] || usage=null
           jq -rn --argjson u "$usage" 'if $u then "Estimated cost: $\($u.cost_usd) (\($u.num_turns) turns)" else "Estimated cost: n/a" end'
 
