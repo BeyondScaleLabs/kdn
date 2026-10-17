@@ -160,6 +160,8 @@ jobs:
       PR_NUMBER: ${{ needs.start.outputs.prNumber }}
       HEAD_SHA: ${{ needs.start.outputs.headSha }}
       SRC_DIR: ${{ github.workspace }}/review-src
+      # Logs and raw outputs uploaded as the review-artifacts artifact (public on public repos).
+      ART_DIR: ${{ github.workspace }}/review-artifacts
     steps:
       - name: Checkout trusted review files from the default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -298,6 +300,7 @@ jobs:
           SANDBOX: ${{ steps.sandbox.outputs.name }}
         run: |
           set -uo pipefail
+          mkdir -p "$ART_DIR"
           start=$(date +%s)
           # shellcheck disable=SC2016 # the inner script expands inside the sandbox, not here
           timeout --kill-after=30 "$((REVIEW_TIMEOUT_SECS + 60))" \
@@ -316,7 +319,9 @@ jobs:
               ' sh \
               "$(cat trusted/.github/codereview/task.md)" \
               "$(cat trusted/.github/codereview/pr-reviewer.md)" \
-              "$REVIEW_MODEL"
+              "$REVIEW_MODEL" \
+            > "$ART_DIR/claude-output.txt" 2>&1
+          # Claude output is shaped by the PR content: kept in the artifact, not echoed to the job log.
           code=$?
           duration=$(( $(date +%s) - start ))
           echo "Review exited with $code after ${duration}s"
@@ -327,14 +332,25 @@ jobs:
             echo "timedOut=$timed_out"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Collect review output and delete sandbox
+      - name: Collect review output and sandbox logs, delete sandbox
         if: ${{ always() && steps.sandbox.outputs.name }}
         env:
           SANDBOX: ${{ steps.sandbox.outputs.name }}
         run: |
-          mkdir -p "$RUNNER_TEMP/out"
+          mkdir -p "$RUNNER_TEMP/out" "$ART_DIR"
           openshell sandbox download "$SANDBOX" /tmp/review-output.json "$RUNNER_TEMP/out" || echo "::warning::No /tmp/review-output.json in the sandbox"
+          find "$RUNNER_TEMP/out" -type f -name review-output.json -exec cp {} "$ART_DIR/review-output.json" \; || true
+          openshell logs "$SANDBOX" -n 100000 > "$ART_DIR/sandbox.log" 2>&1 || true
+          for id in $(podman ps -aq --filter label=openshell.managed=true); do
+            podman logs "$id" > "$ART_DIR/container-$id.log" 2>&1 || true
+          done
           openshell sandbox delete "$SANDBOX" || true
+
+      - name: Collect gateway logs
+        if: ${{ always() }}
+        run: |
+          mkdir -p "$ART_DIR"
+          journalctl --user -u openshell-gateway --no-pager > "$ART_DIR/gateway.log" 2>&1 || true
 
       # The output is model-written and the model read attacker-controlled content: validate it
       # strictly, fall back to REQUEST_CHANGES, and take PR number/sha from trusted metadata only.
@@ -361,6 +377,8 @@ jobs:
             '$review + {pr_number: $pr_number, head_sha: $head_sha, model: $model, duration_s: $duration_s,
                         timed_out: $timed_out, failed: $failed, run_url: $run_url}' \
             > "$RUNNER_TEMP/result/review-result.json"
+          mkdir -p "$ART_DIR"
+          cp "$RUNNER_TEMP/result/review-result.json" "$ART_DIR/"
 
           # Model text must not be interpreted as workflow commands.
           stop_token=$(openssl rand -hex 16)
@@ -375,6 +393,14 @@ jobs:
         with:
           name: review-result
           path: ${{ runner.temp }}/result/review-result.json
+
+      - name: Upload review artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: review-artifacts
+          path: ${{ env.ART_DIR }}
+          if-no-files-found: ignore
 
   report:
     needs: [start, review]
