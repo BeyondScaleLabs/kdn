@@ -38,8 +38,10 @@ jq --arg marker '<!-- ai-code-review -->' '
     gsub("@(?<c>[A-Za-z0-9])"; "@\u200b\(.c)")
     | gsub("<!--"; "&lt;!--")
     | if length > 60000 then .[0:60000] + "\n\n…(truncated)" else . end;
+  def usd: (. * 100 | round) as $c | "$\($c / 100 | floor).\($c % 100 | tostring | if length < 2 then "0" + . else . end)";
 
-  (.comments | tostring | sanitize) as $review
+  (if .usage then (.usage.cost_usd | usd) else "n/a" end) as $cost
+  | (.comments | tostring | sanitize) as $review
   | (if .failed then {conclusion: "failure", title: "⚠️ Review failed or timed out"}
      elif .status == "ACCEPT" then {conclusion: "success", title: "✅ Approved"}
      elif .status == "ACCEPT_WITH_NITS" then {conclusion: "neutral", title: "🟡 Approved with nits"}
@@ -54,6 +56,8 @@ jq --arg marker '<!-- ai-code-review -->' '
       "| Model | `\(.model)` |",
       "| Status | `\(.status)` |",
       "| Duration | \(.duration_s)s |",
+      "| Estimated cost | \($cost) |",
+      (if .usage then "| Tokens | in \(.usage.input_tokens) · out \(.usage.output_tokens) · cache read \(.usage.cache_read_tokens) · cache write \(.usage.cache_write_tokens) (\(.usage.num_turns) turns) |" else empty end),
       "| Timed out | \(if .timed_out then "yes" else "no" end) |",
       "| Run | [workflow logs](\(.run_url)) |",
       "",
@@ -72,7 +76,7 @@ jq --arg marker '<!-- ai-code-review -->' '
         $review,
         "",
         "---",
-        "<sub>Model `\(.model)`. [Run details](\(.run_url)). AI review is advisory.</sub>"
+        "<sub>Model `\(.model)` · estimated cost \($cost) · [Run details](\(.run_url)). AI review is advisory.</sub>"
       ] | join("\n"))
     }
 ' "$result" > "$out/rendered.json"

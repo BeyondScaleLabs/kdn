@@ -315,12 +315,13 @@ jobs:
                   --add-dir /sandbox/src \
                   --permission-mode dontAsk \
                   --allowedTools "Read,Grep,Glob,Bash(git -C /sandbox/src diff:*),Bash(git -C /sandbox/src log:*),Bash(git -C /sandbox/src show:*),Bash(git -C /sandbox/src blame:*),Write(//tmp/review-output.json)" \
-                  --disallowedTools "WebFetch,WebSearch"
+                  --disallowedTools "WebFetch,WebSearch" \
+                  --output-format json
               ' sh \
               "$(cat trusted/.github/codereview/task.md)" \
               "$(cat trusted/.github/codereview/pr-reviewer.md)" \
               "$REVIEW_MODEL" \
-            > "$ART_DIR/claude-output.txt" 2>&1
+            > "$ART_DIR/claude-output.json" 2> "$ART_DIR/claude-stderr.txt"
           # Claude output is shaped by the PR content: kept in the artifact, not echoed to the job log.
           code=$?
           duration=$(( $(date +%s) - start ))
@@ -370,12 +371,24 @@ jobs:
             review=$(jq -c '{status, comments}' "$out")
             failed=false
           fi
+          # Cost and token usage computed by the Claude CLI (absent when the run timed out).
+          usage=$(jq -c 'select(.type == "result") | {
+              cost_usd: (.total_cost_usd | numbers),
+              num_turns: (.num_turns | numbers),
+              input_tokens: (.usage.input_tokens | numbers),
+              output_tokens: (.usage.output_tokens | numbers),
+              cache_read_tokens: (.usage.cache_read_input_tokens // 0 | numbers),
+              cache_write_tokens: (.usage.cache_creation_input_tokens // 0 | numbers)
+            }' "$ART_DIR/claude-output.json" 2>/dev/null | tail -n1 || true)
+          [[ -n "$usage" ]] || usage=null
+          jq -rn --argjson u "$usage" 'if $u then "Estimated cost: $\($u.cost_usd) (\($u.num_turns) turns)" else "Estimated cost: n/a" end'
+
           mkdir -p "$RUNNER_TEMP/result"
-          jq -n --argjson review "$review" --argjson pr_number "$PR_NUMBER" --arg head_sha "$HEAD_SHA" \
+          jq -n --argjson review "$review" --argjson usage "$usage" --argjson pr_number "$PR_NUMBER" --arg head_sha "$HEAD_SHA" \
             --arg model "$REVIEW_MODEL" --argjson duration_s "$DURATION_S" --argjson timed_out "$TIMED_OUT" \
             --argjson failed "$failed" --arg run_url "$RUN_URL" \
             '$review + {pr_number: $pr_number, head_sha: $head_sha, model: $model, duration_s: $duration_s,
-                        timed_out: $timed_out, failed: $failed, run_url: $run_url}' \
+                        timed_out: $timed_out, failed: $failed, run_url: $run_url, usage: $usage}' \
             > "$RUNNER_TEMP/result/review-result.json"
           mkdir -p "$ART_DIR"
           cp "$RUNNER_TEMP/result/review-result.json" "$ART_DIR/"
