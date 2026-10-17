@@ -1,0 +1,82 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# `/ok-to-test <sha>` from a maintainer approves the AI code review of that single commit
+# of an external contributor's PR. It approves (first-time contributor) or re-runs the
+# codereview-pr run of that commit; later pushes are not covered.
+# Never checks out PR code.
+
+name: codereview-ok-to-test
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  ok-to-test:
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/ok-to-test ') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Approve or re-run the PR build for the given commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$COMMENT_BODY" =~ ^/ok-to-test\ ([0-9a-f]{7,40})[[:space:]]*$ ]]; then
+            echo "::notice::Usage: /ok-to-test <commit sha>"
+            exit 0
+          fi
+          wanted=${BASH_REMATCH[1]}
+
+          role=$(gh api "repos/$REPO/collaborators/$COMMENTER/permission" --jq '.role_name' || echo none)
+          case "$role" in
+            admin|maintain|write) ;;
+            *) echo "::notice::$COMMENTER is not allowed to approve AI code reviews"; exit 0 ;;
+          esac
+
+          sha=$(gh api "repos/$REPO/pulls/$PR_NUMBER/commits" --paginate --jq '.[].sha' \
+            | grep -E "^${wanted}" | head -n1 || true)
+          if [[ -z "$sha" ]]; then
+            echo "::error::$wanted is not a commit of PR #$PR_NUMBER"
+            exit 1
+          fi
+
+          run=$(gh api "repos/$REPO/actions/workflows/codereview-pr.yaml/runs?head_sha=$sha&event=pull_request" \
+            --jq '.workflow_runs | sort_by(.created_at) | last | "\(.id) \(.status) \(.conclusion)"')
+          read -r run_id status conclusion <<< "$run"
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            echo "::error::No codereview-pr run found for $sha"
+            exit 1
+          fi
+          if [[ "$conclusion" == "action_required" || "$status" == "waiting" ]]; then
+            echo "Approving fork run $run_id for $sha"
+            gh api -X POST "repos/$REPO/actions/runs/$run_id/approve"
+          elif [[ "$status" == "completed" ]]; then
+            echo "Re-running $run_id for $sha"
+            gh run rerun "$run_id" --repo "$REPO"
+          else
+            echo "::notice::Run $run_id for $sha is still $status; comment /ok-to-test again once it has completed"
+          fi
