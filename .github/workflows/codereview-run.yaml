@@ -41,7 +41,9 @@ on:
     types: [completed]
 
 concurrency:
-  group: codereview-${{ github.event.workflow_run.head_sha }}
+  # One review per PR: a new commit cancels the review of the previous one. The PR number is not
+  # available here (workflow_run.pull_requests is empty for forks), the head repo + branch is.
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 permissions: {}
@@ -424,7 +426,22 @@ jobs:
           name: review-result
           path: ${{ runner.temp }}/result
 
+      # Cancelled by a newer commit: close the check without touching the PR comment,
+      # which belongs to the newest review.
+      - name: Mark check as superseded
+        if: ${{ needs.review.result == 'cancelled' && env.CHECK_RUN_ID != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api -X PATCH "repos/$REPO/check-runs/$CHECK_RUN_ID" \
+            -f status=completed -f conclusion=cancelled \
+            -f "output[title]=Superseded by a newer commit" \
+            -f "output[summary]=This review was cancelled because the pull request was updated. [Run details]($RUN_URL)." \
+            --jq '.html_url'
+
       - name: Render report
+        if: ${{ needs.review.result != 'cancelled' }}
         run: |
           set -euo pipefail
           result="$RUNNER_TEMP/result/review-result.json"
@@ -438,7 +455,7 @@ jobs:
           bash scripts/codereview/render-report.sh "$result" "$RUNNER_TEMP/report"
 
       - name: Complete check run
-        if: ${{ env.CHECK_RUN_ID != '' }}
+        if: ${{ needs.review.result != 'cancelled' && env.CHECK_RUN_ID != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -446,6 +463,7 @@ jobs:
 
       # One sticky comment per PR, updated on each review.
       - name: Comment on PR
+        if: ${{ needs.review.result != 'cancelled' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
