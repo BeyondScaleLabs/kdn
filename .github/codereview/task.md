@@ -10,7 +10,7 @@ Act as a Principal Software Engineer and review the pull request whose checkout 
 
 - `/sandbox/src/meta.json`: PR number, title, body, head and base commits.
 - `/sandbox/src/pr.diff`: the full diff of the PR against its base.
-- `/sandbox/src`: the full checkout at the PR head (with `.git` and `node_modules`). Use `git -C /sandbox/src log|show|diff|blame` for history.
+- `/sandbox/src`: the full checkout at the PR head (with `.git` and `node_modules`). You have a shell: `cd /sandbox/src` and use `git log`, `git show`, `git blame`, `grep`, `ls` freely. The checkout is read-only.
 
 ## Output
 

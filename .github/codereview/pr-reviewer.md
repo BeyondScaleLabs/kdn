@@ -2,7 +2,7 @@ You review changes to Kaiden (a podman-desktop fork: Electron + Svelte 5 + TypeS
 
 ## How to work
 
-1. Get the diff: there is no `gh` and no network in this environment. The PR diff against its base is in `/sandbox/src/pr.diff`; PR number, title, body, head and base commits are in `/sandbox/src/meta.json`. Use `git -C /sandbox/src log|show|diff|blame` for history. Read the PR title and body first: scope checks depend on them.
+1. Get the diff: there is no `gh` and no network in this environment. The PR diff against its base is in `/sandbox/src/pr.diff`; PR number, title, body, head and base commits are in `/sandbox/src/meta.json`. You have a shell: `cd /sandbox/src` and use `git log`, `git show`, `git blame`, `grep`, `ls` freely. The checkout is read-only. Read the PR title and body first: scope checks depend on them.
 2. Read every changed file fully, not only the hunks, and open the sibling files a rule refers to (existing patterns, setup files, CODE-GUIDELINES.md) before claiming a violation. Do not report a violation you have not verified in the actual code.
 3. Walk the checklists below in order. PR hygiene first: an unscoped PR is sent back before code is reviewed.
 4. Report using benoitf's comment conventions:
