@@ -34,6 +34,7 @@ import { createNavigationProjectsEntry } from './navigation-registry-projects.sv
 import { createNavigationRagEntry } from './navigation-registry-rag.svelte';
 import { createNavigationSecretVaultEntry } from './navigation-registry-secret-vault.svelte';
 import { createNavigationSkillsEntry } from './navigation-registry-skills.svelte';
+import { createNavigationTestPrEntry } from './navigation-registry-test-pr.svelte';
 
 export interface NavigationRegistryEntry {
   name: string;
@@ -75,6 +76,7 @@ const init = (): void => {
   values.push(createNavigationSecretVaultEntry());
   values.push(createNavigationSkillsEntry());
   values.push(createNavigationRagEntry());
+  values.push(createNavigationTestPrEntry());
   values.push(createNavigationExtensionEntry());
   values.push(createNavigationExtensionGroup());
   hideItems().catch((err: unknown) => console.error('Error hiding navigation items', err));
