@@ -57,7 +57,7 @@ env:
   OPENSHELL_PROFILE_SHA256: 96c5006fcbf7d6ec8f83dc75fad35f6ae1213573db14543ab06b570ddc9edaeb
   # arm64-only image, hence the arm runner for the review job
   SANDBOX_IMAGE: quay.io/fbenoit/openshell-image-kaiden:20261003@sha256:c078c82e3773a2639324b8a3f578f0bfc4aa9ca2a6009ff4774cd4895f8a0b74
-  REVIEW_MODEL: claude-opus-5-5
+  REVIEW_MODEL: claude-opus-5
   REVIEW_TIMEOUT_SECS: 300
   CHECK_NAME: AI code review
 
@@ -257,6 +257,23 @@ jobs:
           workload_identity_provider: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
           project_id: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
           create_credentials_file: false
+
+      # Informational: log the Anthropic models Vertex offers, using the WIF token, before OpenShell starts.
+      - name: List Vertex AI models
+        continue-on-error: true
+        env:
+          TOKEN: ${{ steps.auth.outputs.auth_token }}
+          PROJECT: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+          REGION: ${{ vars.FULLSEND_GCP_REGION }}
+        run: |
+          set -euo pipefail
+          host=aiplatform.googleapis.com
+          [[ "$REGION" == global ]] || host="${REGION}-aiplatform.googleapis.com"
+          echo "Anthropic models on Vertex (Model Garden):"
+          curl -fsS -H "Authorization: Bearer $TOKEN" -H "x-goog-user-project: $PROJECT" \
+            "https://$host/v1beta1/publishers/anthropic/models?pageSize=200&listAllVersions=true" \
+            | jq -r '.publisherModels[]? | "- \(.name | sub("^publishers/anthropic/models/"; ""))\(if .versionId then "@" + .versionId else "" end) \(.launchStage // "")"'
+          echo "Selected review model: $REVIEW_MODEL"
 
       # Only the gateway holds the token; the sandbox gets a placeholder that the gateway proxy
       # resolves on egress to the Vertex hosts, and only for the claude binary (see profile).
