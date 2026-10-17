@@ -49,25 +49,30 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        # author_association is not used: it reports private org members as CONTRIBUTOR.
         run: |
           set -euo pipefail
-          case "$AUTHOR_ASSOCIATION" in
-            OWNER|MEMBER|COLLABORATOR)
-              echo "ok=true" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-          esac
-          approved=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq '.[] | select(.author_association == "OWNER" or .author_association == "MEMBER" or .author_association == "COLLABORATOR") | .body' \
-            | sed -nE 's/^\/ok-to-test ([0-9a-f]{7,40})[[:space:]]*$/\1/p' \
-            | while read -r sha; do if [[ "$HEAD_SHA" == "$sha"* ]]; then echo yes; fi; done | head -n1)
-          if [[ "$approved" == "yes" ]]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
+          has_write() {
+            local role
+            role=$(gh api "repos/$REPO/collaborators/$1/permission" --jq '.role_name' 2>/dev/null || echo none)
+            [[ "$role" == admin || "$role" == maintain || "$role" == write ]]
+          }
+          ok=false
+          if has_write "$PR_AUTHOR"; then
+            ok=true
           else
-            echo "::notice::External contributor: a maintainer must comment '/ok-to-test ${HEAD_SHA}' to run the AI code review."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
+            # /ok-to-test <sha> comments matching this commit, from users with write access
+            while read -r login; do
+              if [[ -n "$login" ]] && has_write "$login"; then ok=true; break; fi
+            done < <(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq '.[] | "\(.user.login) \(.body)"' \
+              | sed -nE 's/^([^ ]+) \/ok-to-test ([0-9a-f]{7,40})[[:space:]]*$/\1 \2/p' \
+              | while read -r login sha; do if [[ "$HEAD_SHA" == "$sha"* ]]; then echo "$login"; fi; done | sort -u)
           fi
+          if [[ "$ok" != true ]]; then
+            echo "::notice::$PR_AUTHOR has no write access and no maintainer commented '/ok-to-test ${HEAD_SHA}': AI code review skipped."
+          fi
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
 
   build:
     needs: gate
