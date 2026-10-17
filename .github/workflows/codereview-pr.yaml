@@ -36,7 +36,7 @@ jobs:
   # `/ok-to-test <sha>`. Not a security boundary: codereview-run.yaml re-checks with the permission API.
   gate:
     if: ${{ !github.event.pull_request.draft }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       pull-requests: read
     outputs:
@@ -72,7 +72,7 @@ jobs:
   build:
     needs: gate
     if: ${{ needs.gate.outputs.ok == 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions: {}
     steps:

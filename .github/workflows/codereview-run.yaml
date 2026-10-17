@@ -62,7 +62,7 @@ env:
 jobs:
   start:
     if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: read
       checks: write
@@ -399,7 +399,7 @@ jobs:
   report:
     needs: [start, review]
     if: ${{ always() && needs.start.outputs.authorized == 'true' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       actions: read
       checks: write
