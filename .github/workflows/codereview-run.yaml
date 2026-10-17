@@ -339,6 +339,9 @@ jobs:
                 # Claude sends ANTHROPIC_AUTH_TOKEN as "Authorization: Bearer"; its value is the provider placeholder,
                 # which the OpenShell proxy replaces with the real token on the way to Vertex.
                 export ANTHROPIC_AUTH_TOKEN="${GOOGLE_VERTEX_AI_TOKEN:?Vertex provider token not injected}"
+                # The checkout is owned by another uid inside the sandbox; trust it so git does not refuse it ("dubious ownership").
+                printf "[safe]\n\tdirectory = /sandbox/src\n" > /tmp/gitconfig
+                export GIT_CONFIG_GLOBAL=/tmp/gitconfig
                 mkdir -p /tmp/work && cd /tmp/work || exit 1
                 exec claude -p "$1" --append-system-prompt "$2" --model "$3" \
                   --bare --setting-sources user --strict-mcp-config --no-session-persistence \
