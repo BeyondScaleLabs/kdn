@@ -19,15 +19,18 @@
 # stage jobs with -agent- suffix. Roles operate independently (#2452).
 name: fullsend
 
+# Automatic triggers disabled: manual runs only. To re-enable, uncomment the block below
+# and remove workflow_dispatch.
 on:
-  issues:
-    types: [opened, edited, labeled]
-  issue_comment:
-    types: [created]
-  pull_request_target:
-    types: [opened, synchronize, ready_for_review, closed, labeled, unlabeled]
-  pull_request_review:
-    types: [submitted]
+  workflow_dispatch: {}
+  # issues:
+  #   types: [opened, edited, labeled]
+  # issue_comment:
+  #   types: [created]
+  # pull_request_target:
+  #   types: [opened, synchronize, ready_for_review, closed, labeled, unlabeled]
+  # pull_request_review:
+  #   types: [submitted]
 
 permissions: {}
 
