@@ -185,38 +185,6 @@ jobs:
           tar --no-same-owner --no-same-permissions -xzf "$RUNNER_TEMP/dl/review-src.tgz" -C "$SRC_DIR"
           rm -rf "$RUNNER_TEMP/dl"
 
-      # Same setup as OpenShell v0.1.4 .github/actions/setup-e2e-podman (Podman 5 is required).
-      - name: Install rootless Podman
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends apparmor fuse-overlayfs passt podman conmon uidmap
-          podman_config="$RUNNER_TEMP/openshell-containers.conf"
-          printf '%s\n' '[engine]' 'conmon_path = ["/usr/bin/conmon"]' > "$podman_config"
-          echo "/usr/bin" >> "$GITHUB_PATH"
-          echo "CONTAINERS_CONF_OVERRIDE=$podman_config" >> "$GITHUB_ENV"
-          # Ubuntu's pasta profile blocks the signal Podman uses to stop it.
-          profile=/etc/apparmor.d/usr.bin.pasta
-          rule='  signal (receive) peer=podman,'
-          if ! sudo grep -Fqx "$rule" "$profile"; then
-            sudo sed -i '\|^  include <abstractions/pasta>$|a\  signal (receive) peer=podman,' "$profile"
-          fi
-          sudo apparmor_parser --replace "$profile"
-          grep -q "^$USER:" /etc/subuid || sudo usermod --add-subuids 100000-165535 "$USER"
-          grep -q "^$USER:" /etc/subgid || sudo usermod --add-subgids 100000-165535 "$USER"
-          # A lingering user manager provides XDG_RUNTIME_DIR and `systemctl --user` for podman.socket and the gateway.
-          sudo loginctl enable-linger "$USER"
-          runtime_dir="/run/user/$(id -u)"
-          for _ in $(seq 30); do [[ -S "$runtime_dir/bus" ]] && break; sleep 1; done
-          {
-            echo "XDG_RUNTIME_DIR=$runtime_dir"
-            echo "DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus"
-          } >> "$GITHUB_ENV"
-          case "$(/usr/bin/podman version --format '{{.Client.Version}}')" in
-            5.*) ;;
-            *) echo "::error::OpenShell needs Podman 5.x"; exit 1 ;;
-          esac
-
       - name: Install OpenShell
         run: |
           set -euo pipefail
@@ -246,6 +214,17 @@ jobs:
           [openshell.drivers.podman.resource_admission]
           enabled = false
           EOF
+          # Podman ships with the runner image. A lingering user manager provides XDG_RUNTIME_DIR
+          # and `systemctl --user` for podman.socket and the gateway service.
+          sudo loginctl enable-linger "$USER"
+          runtime_dir="/run/user/$(id -u)"
+          for _ in $(seq 30); do [[ -S "$runtime_dir/bus" ]] && break; sleep 1; done
+          export XDG_RUNTIME_DIR="$runtime_dir" DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime_dir/bus"
+          {
+            echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+            echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
+          } >> "$GITHUB_ENV"
+          podman version --format 'Podman {{.Client.Version}}'
           systemctl --user daemon-reload
           systemctl --user enable --now podman.socket
           systemctl --user enable --now openshell-gateway
