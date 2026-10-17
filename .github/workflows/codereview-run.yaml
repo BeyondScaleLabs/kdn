@@ -312,6 +312,9 @@ jobs:
               --env CLAUDE_CODE_SKIP_VERTEX_AUTH=1 \
               --env CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
               -- sh -c '
+                # Claude sends ANTHROPIC_AUTH_TOKEN as "Authorization: Bearer"; its value is the provider placeholder,
+                # which the OpenShell proxy replaces with the real token on the way to Vertex.
+                export ANTHROPIC_AUTH_TOKEN="${GOOGLE_VERTEX_AI_TOKEN:?Vertex provider token not injected}"
                 mkdir -p /tmp/work && cd /tmp/work || exit 1
                 exec claude -p "$1" --append-system-prompt "$2" --model "$3" \
                   --bare --setting-sources user --strict-mcp-config --no-session-persistence \
