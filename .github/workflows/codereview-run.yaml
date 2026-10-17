@@ -340,7 +340,7 @@ jobs:
                   --bare --setting-sources user --strict-mcp-config --no-session-persistence \
                   --add-dir /sandbox/src \
                   --permission-mode dontAsk \
-                  --allowedTools "Read,Grep,Glob,Bash(git -C /sandbox/src diff:*),Bash(git -C /sandbox/src log:*),Bash(git -C /sandbox/src show:*),Bash(git -C /sandbox/src blame:*),Write(//tmp/review-output.json)" \
+                  --allowedTools "Read,Grep,Glob,Bash,Write(//tmp/review-output.json)" \
                   --disallowedTools "WebFetch,WebSearch" \
                   --output-format stream-json --verbose
               ' sh \
