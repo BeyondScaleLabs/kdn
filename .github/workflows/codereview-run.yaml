@@ -373,8 +373,16 @@ jobs:
           SANDBOX: ${{ steps.sandbox.outputs.name }}
         run: |
           mkdir -p "$RUNNER_TEMP/out" "$ART_DIR"
-          openshell sandbox download "$SANDBOX" /tmp/review-output.json "$RUNNER_TEMP/out" || echo "::warning::No /tmp/review-output.json in the sandbox"
-          find "$RUNNER_TEMP/out" -type f -name review-output.json -exec cp {} "$ART_DIR/review-output.json" \; || true
+          # `sandbox download` only accepts paths under the sandbox workspace, not /tmp: read it over exec instead.
+          # Capped at 1 MB + 1 byte so the validation step can reject oversized output.
+          out="$RUNNER_TEMP/out/review-output.json"
+          if openshell sandbox exec -n "$SANDBOX" --no-tty -- cat /tmp/review-output.json 2>/dev/null \
+              | head -c 1048577 > "$out" && [[ -s "$out" ]]; then
+            cp "$out" "$ART_DIR/review-output.json"
+          else
+            rm -f "$out"
+            echo "::warning::No /tmp/review-output.json in the sandbox"
+          fi
           openshell logs "$SANDBOX" -n 100000 > "$ART_DIR/sandbox.log" 2>&1 || true
           for id in $(podman ps -aq --filter label=openshell.managed=true); do
             podman logs "$id" > "$ART_DIR/container-$id.log" 2>&1 || true
