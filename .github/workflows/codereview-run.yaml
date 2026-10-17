@@ -58,7 +58,7 @@ env:
   # arm64-only image, hence the arm runner for the review job
   SANDBOX_IMAGE: quay.io/fbenoit/openshell-image-kaiden:20261003@sha256:c078c82e3773a2639324b8a3f578f0bfc4aa9ca2a6009ff4774cd4895f8a0b74
   REVIEW_MODEL: claude-opus-4-6
-  REVIEW_TIMEOUT_SECS: 300
+  REVIEW_TIMEOUT_SECS: 900
   CHECK_NAME: AI code review
 
 jobs:
@@ -151,7 +151,7 @@ jobs:
     needs: start
     if: ${{ needs.start.outputs.authorized == 'true' }}
     runs-on: ubuntu-26.04-arm
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       actions: read
       contents: read
@@ -249,24 +249,26 @@ jobs:
       - name: Pull sandbox image
         run: podman pull "$SANDBOX_IMAGE"
 
-      # Direct WIF, no credentials file on disk: auth_token is the short-lived federated access token.
+      # Direct WIF. The external_account file it writes (workspace root, never mounted or uploaded) is used by
+      # vertex-token.sh to mint fresh tokens: the federated token lives only as long as GitHub's OIDC token (~5 min).
       - name: Authenticate to GCP via WIF
         id: auth
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
           project_id: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
-          create_credentials_file: false
 
       # Only the gateway holds the token; the sandbox gets a placeholder that the gateway proxy
       # resolves on egress to the Vertex hosts, and only for the claude binary (see profile).
       - name: Register Vertex AI provider
         env:
-          GOOGLE_VERTEX_AI_TOKEN: ${{ steps.auth.outputs.auth_token }}
           VERTEX_PROJECT: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
           VERTEX_REGION: ${{ vars.FULLSEND_GCP_REGION }}
         run: |
           set -euo pipefail
+          GOOGLE_VERTEX_AI_TOKEN=$(bash trusted/.github/codereview/vertex-token.sh "$GOOGLE_APPLICATION_CREDENTIALS")
+          echo "::add-mask::$GOOGLE_VERTEX_AI_TOKEN"
+          export GOOGLE_VERTEX_AI_TOKEN
           profile="$RUNNER_TEMP/review-google-vertex-ai.yaml"
           curl -fsSL -o "$RUNNER_TEMP/google-vertex-ai.yaml" "$OPENSHELL_PROFILE_URL"
           echo "$OPENSHELL_PROFILE_SHA256  $RUNNER_TEMP/google-vertex-ai.yaml" | sha256sum -c -
@@ -310,6 +312,19 @@ jobs:
           stop_token=$(openssl rand -hex 16)
           echo "::group::Review agent (live)"
           echo "::stop-commands::$stop_token"
+          # GitHub OIDC (hence the federated Vertex token) lives ~5 min: push a fresh token to the gateway every 3 min.
+          # The gateway updates the sandbox proxy's resolver; the sandbox only ever sees the placeholder.
+          (
+            while sleep 180; do
+              if t=$(bash trusted/.github/codereview/vertex-token.sh "$GOOGLE_APPLICATION_CREDENTIALS" 2>/dev/null) \
+                && GOOGLE_VERTEX_AI_TOKEN="$t" openshell provider update vertex --credential GOOGLE_VERTEX_AI_TOKEN >/dev/null 2>&1; then
+                echo "🔑 Vertex token refreshed"
+              else
+                echo "⚠️ Vertex token refresh failed"
+              fi
+            done
+          ) &
+          refresher=$!
           # shellcheck disable=SC2016 # the inner script expands inside the sandbox, not here
           timeout --kill-after=30 "$((REVIEW_TIMEOUT_SECS + 60))" \
             openshell sandbox exec -n "$SANDBOX" --timeout "$REVIEW_TIMEOUT_SECS" --no-tty \
@@ -336,6 +351,7 @@ jobs:
             | tee "$ART_DIR/claude-output.jsonl" \
             | jq -R -r --unbuffered -f trusted/.github/codereview/stream.jq
           code=${PIPESTATUS[0]}
+          kill "$refresher" 2>/dev/null || true
           echo "::$stop_token::"
           echo "::endgroup::"
           duration=$(( $(date +%s) - start ))
