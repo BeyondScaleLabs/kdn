@@ -267,15 +267,17 @@ jobs:
           VERTEX_REGION: ${{ vars.FULLSEND_GCP_REGION }}
         run: |
           set -euo pipefail
-          profile="$RUNNER_TEMP/review-vertex-ai.yaml"
+          profile="$RUNNER_TEMP/review-google-vertex-ai.yaml"
           curl -fsSL -o "$RUNNER_TEMP/google-vertex-ai.yaml" "$OPENSHELL_PROFILE_URL"
           echo "$OPENSHELL_PROFILE_SHA256  $RUNNER_TEMP/google-vertex-ai.yaml" | sha256sum -c -
-          # Distinct id, and only the image's claude CLI may use the Vertex token.
-          yq '.id = "review-vertex-ai" | .display_name = "Google Vertex AI (code review)" | .binaries = ["/usr/local/bin/claude"]' \
+          # Only the image's claude CLI may use the Vertex token. Keep the upstream id: OpenShell's
+          # Vertex plugin is keyed on type "google-vertex-ai" and is what projects
+          # ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION, ... into the sandbox.
+          yq '.display_name = "Google Vertex AI (code review)" | .binaries = ["/usr/local/bin/claude"]' \
             "$RUNNER_TEMP/google-vertex-ai.yaml" > "$profile"
           openshell provider profile lint -f "$profile"
           openshell provider profile import -f "$profile" --global
-          openshell provider create --name vertex --type review-vertex-ai --global-profile \
+          openshell provider create --name vertex --type google-vertex-ai --global-profile \
             --credential GOOGLE_VERTEX_AI_TOKEN \
             --config "VERTEX_AI_PROJECT_ID=$VERTEX_PROJECT" \
             --config "VERTEX_AI_REGION=$VERTEX_REGION"
@@ -300,6 +302,7 @@ jobs:
           SANDBOX: ${{ steps.sandbox.outputs.name }}
         run: |
           set -uo pipefail
+          set +e # GitHub runs this with bash -e: keep going to record the exit code
           mkdir -p "$ART_DIR"
           start=$(date +%s)
           # shellcheck disable=SC2016 # the inner script expands inside the sandbox, not here
@@ -322,10 +325,19 @@ jobs:
               "$(cat trusted/.github/codereview/pr-reviewer.md)" \
               "$REVIEW_MODEL" \
             > "$ART_DIR/claude-output.json" 2> "$ART_DIR/claude-stderr.txt"
-          # Claude output is shaped by the PR content: kept in the artifact, not echoed to the job log.
           code=$?
           duration=$(( $(date +%s) - start ))
           echo "Review exited with $code after ${duration}s"
+          # Claude output is shaped by the PR content: kept in the artifact; only CLI status fields are logged,
+          # plus the error text on failure, with workflow commands disabled.
+          jq -r 'select(.type == "result") | "Claude: subtype=\(.subtype) is_error=\(.is_error) turns=\(.num_turns) api_error_status=\(.api_error_status)"' \
+            "$ART_DIR/claude-output.json" 2>/dev/null
+          if jq -e 'select(.type == "result") | .is_error == true' "$ART_DIR/claude-output.json" >/dev/null 2>&1; then
+            stop_token=$(openssl rand -hex 16)
+            echo "::stop-commands::$stop_token"
+            jq -r 'select(.type == "result") | .result | tostring | .[0:2000]' "$ART_DIR/claude-output.json"
+            echo "::$stop_token::"
+          fi
           timed_out=false
           if (( code == 124 || duration >= REVIEW_TIMEOUT_SECS )); then timed_out=true; fi
           {
