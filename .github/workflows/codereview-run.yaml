@@ -306,7 +306,6 @@ jobs:
               --env CLAUDE_CODE_SKIP_VERTEX_AUTH=1 \
               --env CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
               -- sh -c '
-                export ANTHROPIC_CUSTOM_HEADERS="Authorization: Bearer ${GOOGLE_VERTEX_AI_TOKEN}"
                 mkdir -p /tmp/work && cd /tmp/work || exit 1
                 exec claude -p "$1" --append-system-prompt "$2" --model "$3" \
                   --bare --setting-sources user --strict-mcp-config --no-session-persistence \
