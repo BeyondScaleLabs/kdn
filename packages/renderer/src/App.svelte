@@ -103,6 +103,7 @@ import StatusBar from './lib/statusbar/StatusBar.svelte';
 import IconsStyle from './lib/style/IconsStyle.svelte';
 import { PodmanDesktopStoragePersist } from './lib/table/PodmanDesktopStoragePersist';
 import TaskManager from './lib/task-manager/TaskManager.svelte';
+import TestPrPage from './lib/test-pr/TestPrPage.svelte';
 import ToastHandler from './lib/toast/ToastHandler.svelte';
 import ToastTaskNotifications from './lib/toast/ToastTaskNotifications.svelte';
 import TroubleshootingPage from './lib/troubleshooting/TroubleshootingPage.svelte';
@@ -330,6 +331,11 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         </Route>
         <Route path="/mcp-install-from-registry/:serverId/*" breadcrumb="Install MCP Server from Registry" let:meta>
           <McpRegistryCreateFromRegistryForm serverId={decodeURIComponent(meta.params.serverId)} />
+        </Route>
+
+        <!-- Test PR -->
+        <Route path="/test-pr" breadcrumb="Test PR" navigationHint="root">
+          <TestPrPage />
         </Route>
 
         <!-- Coding agents -->
