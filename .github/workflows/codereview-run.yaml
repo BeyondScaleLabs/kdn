@@ -275,7 +275,11 @@ jobs:
           # Only the image's claude CLI may use the Vertex token. Keep the upstream id: OpenShell's
           # Vertex plugin is keyed on type "google-vertex-ai" and is what projects
           # ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION, ... into the sandbox.
-          yq '.display_name = "Google Vertex AI (code review)" | .binaries = ["/usr/local/bin/claude"]' \
+          # The runner refreshes GOOGLE_VERTEX_AI_TOKEN itself (see Run review), so drop the gateway refresh and use a
+          # stable placeholder: otherwise the long-running claude process keeps resolving the first (expired) token.
+          yq '.display_name = "Google Vertex AI (code review)"
+              | .binaries = ["/usr/local/bin/claude"]
+              | (.credentials[] | select(.name == "gcloud_adc_token")) |= (del(.refresh) | .stable_placeholder = true)' \
             "$RUNNER_TEMP/google-vertex-ai.yaml" > "$profile"
           openshell provider profile lint -f "$profile"
           openshell provider profile import -f "$profile" --global
@@ -317,7 +321,7 @@ jobs:
           (
             while sleep 180; do
               if t=$(bash trusted/.github/codereview/vertex-token.sh "$GOOGLE_APPLICATION_CREDENTIALS" 2>/dev/null) \
-                && GOOGLE_VERTEX_AI_TOKEN="$t" openshell provider update vertex --credential GOOGLE_VERTEX_AI_TOKEN >/dev/null 2>&1; then
+                && GOOGLE_VERTEX_AI_TOKEN="$t" openshell provider update vertex --credential GOOGLE_VERTEX_AI_TOKEN --wait --timeout 60 >/dev/null 2>&1; then
                 echo "🔑 Vertex token refreshed"
               else
                 echo "⚠️ Vertex token refresh failed"
