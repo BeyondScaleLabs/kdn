@@ -57,7 +57,7 @@ env:
   OPENSHELL_PROFILE_SHA256: 96c5006fcbf7d6ec8f83dc75fad35f6ae1213573db14543ab06b570ddc9edaeb
   # arm64-only image, hence the arm runner for the review job
   SANDBOX_IMAGE: quay.io/fbenoit/openshell-image-kaiden:20261003@sha256:c078c82e3773a2639324b8a3f578f0bfc4aa9ca2a6009ff4774cd4895f8a0b74
-  REVIEW_MODEL: claude-opus-4-6
+  REVIEW_MODEL: claude-sonnet-5-5
   REVIEW_TIMEOUT_SECS: 900
   CHECK_NAME: AI code review
 
