@@ -27,6 +27,6 @@ permissions: {}
 
 jobs:
   build:
-    uses: review-processing/actions/.github/workflows/pr.yaml@1de79c32542f9eee1ffd5524949b856b54bd7d80 # main
+    uses: review-processing/actions/.github/workflows/pr.yaml@f87e3b027499f033dae51830df1d5b8758a63537 # main
     permissions:
       pull-requests: read
