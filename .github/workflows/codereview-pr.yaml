@@ -14,10 +14,8 @@
 # limitations under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
-
-# Untrusted half of the AI code review: runs PR code with no secrets and a read-only token,
-# then hands the checkout to codereview-run.yaml through artifacts.
-# Everything produced here is attacker-controlled and treated as such by codereview-run.yaml.
+# Untrusted half of the AI code review: builds the PR checkout as artifacts, with no secrets.
+# The review itself runs in review-processing/review (see codereview-dispatch.yaml).
 
 name: codereview-pr
 
@@ -25,111 +23,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
-  # Cheap filter to avoid building for external contributors until a maintainer posts
-  # `/ok-to-test <sha>`. Not a security boundary: codereview-run.yaml re-checks with the permission API.
-  gate:
-    if: ${{ !github.event.pull_request.draft }}
-    runs-on: ubuntu-26.04
+  build:
+    uses: review-processing/actions/.github/workflows/pr.yaml@fd233f2ceebd03a47dc6d5d6b9a48f71ca833546 # main
     permissions:
       pull-requests: read
-    outputs:
-      ok: ${{ steps.gate.outputs.ok }}
-    steps:
-      - name: Check author or /ok-to-test approval
-        id: gate
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-        # author_association is not used: it reports private org members as CONTRIBUTOR.
-        run: |
-          set -euo pipefail
-          has_write() {
-            local role
-            role=$(gh api "repos/$REPO/collaborators/$1/permission" --jq '.role_name' 2>/dev/null || echo none)
-            [[ "$role" == admin || "$role" == maintain || "$role" == write ]]
-          }
-          ok=false
-          if has_write "$PR_AUTHOR"; then
-            ok=true
-          else
-            # /ok-to-test <sha> comments matching this commit, from users with write access
-            while read -r login; do
-              if [[ -n "$login" ]] && has_write "$login"; then ok=true; break; fi
-            done < <(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq '.[] | "\(.user.login) \(.body)"' \
-              | sed -nE 's/^([^ ]+) \/ok-to-test ([0-9a-f]{7,40})[[:space:]]*$/\1 \2/p' \
-              | while read -r login sha; do if [[ "$HEAD_SHA" == "$sha"* ]]; then echo "$login"; fi; done | sort -u)
-          fi
-          if [[ "$ok" != true ]]; then
-            echo "::notice::$PR_AUTHOR has no write access and no maintainer commented '/ok-to-test ${HEAD_SHA}': AI code review skipped."
-          fi
-          echo "ok=$ok" >> "$GITHUB_OUTPUT"
-
-  build:
-    needs: gate
-    if: ${{ needs.gate.outputs.ok == 'true' }}
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    permissions: {}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        name: Install pnpm
-        with:
-          run_install: false
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-
-      # --ignore-scripts: dependency lifecycle scripts never run, node_modules is only there for the reviewer to read.
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Write PR diff and metadata
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          git diff "$BASE_SHA...$HEAD_SHA" > pr.diff
-          mkdir -p "$RUNNER_TEMP/review-meta"
-          jq -n --argjson pr_number "$PR_NUMBER" --arg head_sha "$HEAD_SHA" --arg base_sha "$BASE_SHA" \
-            --arg title "$PR_TITLE" --arg body "$PR_BODY" \
-            '{pr_number: $pr_number, head_sha: $head_sha, base_sha: $base_sha, title: $title, body: $body}' \
-            | tee meta.json > "$RUNNER_TEMP/review-meta/meta.json"
-
-      # tar keeps pnpm symlinks and dotfiles that upload-artifact would follow or drop.
-      - name: Archive checkout
-        run: tar -czf "$RUNNER_TEMP/review-src.tgz" .
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: review-meta
-          path: ${{ runner.temp }}/review-meta/meta.json
-          retention-days: 7
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: review-src
-          path: ${{ runner.temp }}/review-src.tgz
-          compression-level: 0
-          retention-days: 7
