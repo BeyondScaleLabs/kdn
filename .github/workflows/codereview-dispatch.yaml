@@ -29,7 +29,7 @@ permissions: {}
 jobs:
   dispatch:
     if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
-    uses: review-processing/actions/.github/workflows/dispatch.yaml@fb453740c733d6f3da338e66bee32e5a0e0d5210 # main
+    uses: review-processing/actions/.github/workflows/dispatch.yaml@1de79c32542f9eee1ffd5524949b856b54bd7d80 # main
     permissions:
       actions: read
       pull-requests: read
