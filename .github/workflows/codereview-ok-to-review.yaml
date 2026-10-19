@@ -28,7 +28,7 @@ permissions: {}
 jobs:
   ok-to-review:
     if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/ok-to-review ') }}
-    uses: review-processing/actions/.github/workflows/ok-to-review.yaml@fd233f2ceebd03a47dc6d5d6b9a48f71ca833546 # main
+    uses: review-processing/actions/.github/workflows/ok-to-review.yaml@fb453740c733d6f3da338e66bee32e5a0e0d5210 # main
     permissions:
       actions: write
       pull-requests: read
